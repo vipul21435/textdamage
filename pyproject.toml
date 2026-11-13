@@ -31,11 +31,12 @@ Homepage = "https://github.com/vipul21435/textdamage"
 packages = ["src/textdamage"]
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["UP031"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
