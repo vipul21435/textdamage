@@ -84,3 +84,13 @@ def test_class_filter_and_unknown_class():
 
 def test_class_list_is_stable():
     assert CLASSES[0] == "mojibake" and len(set(CLASSES)) == len(CLASSES)
+
+
+def test_fullwidth_punctuation_is_not_compat():
+    assert counts("\u4f60\u597d\uff0c\u4e16\u754c\uff1f")["compat"] == 0
+    assert counts("\uff21\uff11")["compat"] == 2
+
+
+def test_repeats_inside_code_are_skipped():
+    code = "```\nx = 1" + " " * 12 + "# aligned\n```"
+    assert counts(code)["repeat"] == 0

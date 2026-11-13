@@ -16,8 +16,9 @@ Class names, in report order:
 - ``bom``: U+FEFF inside a field value (a byte-order mark at the very start of a file is removed by the
   reader and not counted).
 - ``non-nfc``: a combining sequence (a starter and the non-starters after it) that NFC normalisation changes.
-- ``compat``: compatibility characters of a formatting kind: decomposition tag ``<font>``, ``<wide>``,
-  ``<narrow>``, ``<circle>``, ``<square>``, ``<small>``, ``<vertical>``, or a Latin ligature U+FB00..U+FB06.
+- ``compat``: compatibility characters of a formatting kind: decomposition tag ``<font>``, ``<narrow>``,
+  ``<circle>``, ``<square>``, ``<small>``, ``<vertical>``, ``<wide>`` letters, digits and symbols (fullwidth
+  punctuation is ordinary in CJK text and not counted), or a Latin ligature U+FB00..U+FB06.
 - ``confusable``: a word (run of letters and marks) mixing Latin with Cyrillic or Greek letters in which the
   minority-script letters are in the confusable table (``chars.CONFUSABLE_TO_LATIN``).  One per word.
 - ``escape``: literal backslash escapes ``\\n``, ``\\t``, ``\\r`` (not followed by a lowercase letter, so LaTeX
@@ -27,8 +28,8 @@ Class names, in report order:
 - ``surrogate``: a lone surrogate code point.  Bytes that are not valid UTF-8 in an input file are read as lone
   surrogates U+DC80..U+DCFF and land here.
 - ``repeat``: a run of at least ``repeat_min`` identical punctuation characters, or of horizontal whitespace
-  inside a line (indentation is skipped), or of blank lines.  Punctuation runs that fill a whole line or sit
-  in a Markdown table row are skipped.
+  inside a line (indentation is skipped), or of blank lines, outside Markdown code.  Punctuation runs that
+  fill a whole line or sit in a Markdown table row are skipped.
 """
 
 from __future__ import annotations
@@ -75,12 +76,12 @@ _CODE_RE = re.compile(r"```.*?(?:```|\Z)|`[^`\n]+`", re.S)
 _ESCAPE_RE = re.compile(r"\\(?:[nrt](?![a-z])|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|x[0-9a-fA-F]{2})")
 _ENTITY_RE = re.compile(r"&(?:#[0-9]{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z][A-Za-z0-9]{1,31};)")
 _HTML5 = frozenset(html.entities.html5)
-_WORD_RE = re.compile(r"[^\W\d_](?:[^\W\d_]|[̀-ͯ])*")
+_WORD_RE = re.compile(r"[^\W\d_](?:[^\W\d_]|[\u0300-\u036f])*")
 
 
-def _masked(text: str) -> str:
-    """``text`` with Markdown code spans and fences blanked out (same length)."""
-    return _CODE_RE.sub(lambda m: " " * len(m.group()), text)
+def _masked(text: str, fill: str = " ") -> str:
+    """``text`` with Markdown code spans and fences replaced by ``fill`` (same length, newlines kept)."""
+    return _CODE_RE.sub(lambda m: "".join(c if c == "\n" else fill for c in m.group()), text)
 
 
 def _char_class(text: str, table: frozenset[str], cls: str) -> list[Finding]:
@@ -153,7 +154,8 @@ def detect_repeats(text: str, repeat_min: int = 10) -> list[Finding]:
     if repeat_min < 2:
         raise ValueError("repeat_min must be at least 2")
     out = []
-    for m in re.finditer("[ \t 　]{%d,}" % repeat_min, text):
+    text = _masked(text, "x")
+    for m in re.finditer("[ \t\u00a0\u3000]{%d,}" % repeat_min, text):
         if m.start() == 0 or text[m.start() - 1] == "\n" or m.end() == len(text) or text[m.end()] == "\n":
             continue  # indentation and trailing space
         out.append(Finding("repeat", m.start(), m.end(), m.group()[:3]))

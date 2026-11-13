@@ -8,10 +8,12 @@ the result still contains candidates it is decoded a second time (two rounds of 
 
 A repair is proposed only when it is more plausible by this score, ``badness``: the count of control,
 surrogate, private-use and unassigned characters, plus characters outside a fixed list of commonly written
-script and symbol blocks, plus remaining mojibake sequences.  The repair is accepted only when the repaired
+script and symbol blocks, plus remaining mojibake sequences.  A repair is also refused when its first or last
+letter would sit against a letter of another script among Latin, Greek and Cyrillic (``"AQU\u00cd\u00bb"`` in
+Spanish would otherwise become a Latin word ending in a Greek letter).  The repair is accepted only when the repaired
 group scores 0 (every candidate group scores at least 1).  Everything else is never changed; a rejected group is
 counted as ambiguous when its record also holds an accepted repair, and otherwise treated as ordinary text
-(``"ß“"`` in German decodes to an NKo letter and is left alone).
+(``"\u00df\u201c"`` in German decodes to an NKo letter and is left alone).
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+
+from .chars import script_of
 
 _SLOPPY_1252: dict[int, str] = {}
 for _b in range(0x80, 0x100):
@@ -33,16 +37,16 @@ TO_BYTE.update({ch: b for b, ch in _SLOPPY_1252.items()})
 _CONT = sorted({ch for ch, b in TO_BYTE.items() if 0x80 <= b <= 0xBF})
 _C = "[" + "".join(re.escape(c) for c in _CONT) + "]"
 SEQ_RE = re.compile(
-    "(?:[Â-ß]" + _C + "|[à-ï]" + _C + "{2}|[ð-ô]" + _C + "{3})"
+    "(?:[\u00c2-\u00df]" + _C + "|[\u00e0-\u00ef]" + _C + "{2}|[\u00f0-\u00f4]" + _C + "{3})"
 )
-_LONE_LEAD_RE = re.compile("[ÂÃ](?= |$)")
+_LONE_LEAD_RE = re.compile("[\u00c2\u00c3](?= |$)")
 
 # Blocks a repaired character may fall in.  Characters below U+0250 (Latin-1 and Latin Extended-A/B) are
 # always allowed.
 COMMON_BLOCKS: tuple[tuple[int, int], ...] = (
     (0x02B0, 0x02FF),  # spacing modifier letters
     (0x0300, 0x036F),  # combining diacritical marks
-    (0x0370, 0x03FF),  # Greek
+    (0x0384, 0x03CE),  # Greek (modern letters and tonos)
     (0x0400, 0x052F),  # Cyrillic
     (0x0530, 0x058F),  # Armenian
     (0x0590, 0x05FF),  # Hebrew
@@ -146,6 +150,24 @@ def _judge(orig: str, group: list[tuple[int, int, str]]) -> tuple[str | None, in
     return None, 0, len(group)
 
 
+_MIXABLE = ("LATIN", "GREEK", "CYRILLIC")
+
+
+def _script_clash(a: str, b: str) -> bool:
+    """Two adjacent letters, one Latin and one Greek or Cyrillic."""
+    if not (a.isalpha() and b.isalpha()):
+        return False
+    sa, sb = script_of(a), script_of(b)
+    return sa != sb and sa in _MIXABLE and sb in _MIXABLE and "LATIN" in (sa, sb)
+
+
+def _clashes(text: str, start: int, end: int, fix: str) -> bool:
+    """A repair whose first or last letter would change script against the letter next to it."""
+    if start > 0 and _script_clash(text[start - 1], fix[0]):
+        return True
+    return end < len(text) and _script_clash(fix[-1], text[end])
+
+
 def find_mojibake(text: str) -> list[MojibakeHit]:
     """Accepted and ambiguous mojibake hits in ``text``, in order."""
     hits: list[MojibakeHit] = []
@@ -153,13 +175,16 @@ def find_mojibake(text: str) -> list[MojibakeHit]:
     for group in _groups(candidates(text)):
         gs, ge = group[0][0], group[-1][1]
         fix, rounds, n = _judge(text[gs:ge], group)
+        if fix is not None and _clashes(text, gs, ge, fix):
+            fix = None
+            group = group[:1] if len(group) == 1 else group
         if fix is not None:
             hits.append(MojibakeHit(gs, ge, text[gs:ge], fix, rounds, n))
             continue
         # fall back to single sequences inside a group that failed as a whole
         for s, e, _ in group if len(group) > 1 else []:
             f1, r, n1 = _judge(text[s:e], [(s, e, _decode(text[s:e]) or "")])
-            if f1 is not None:
+            if f1 is not None and not _clashes(text, s, e, f1):
                 hits.append(MojibakeHit(s, e, text[s:e], f1, r, n1))
             else:
                 rejected.append(MojibakeHit(s, e, text[s:e], None, 0, 1))

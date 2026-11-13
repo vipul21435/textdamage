@@ -13,17 +13,17 @@ from textdamage.mojibake import make_mojibake
 
 
 def test_repair_text_classes():
-    text = "cafÃ©﻿\x00\x85 zero​width é a‍b"
+    text = "caf\u00c3\u00a9\ufeff\x00\x85 zero\u200bwidth e\u0301 a\u200db"
     new, changes = repair_text(text, ["mojibake", "bom", "c0", "c1", "invisible", "non-nfc"])
-    assert new == "café zerowidth é a‍b"
+    assert new == "caf\u00e9 zerowidth \u00e9 a\u200db"
     assert [c.cls for c in changes] == ["mojibake", "bom", "c0", "c1", "invisible", "non-nfc"]
     with pytest.raises(ValueError):
         repair_text("x", ["confusable"])
 
 
 def test_repair_respects_ignore_list():
-    new, _ = repair_text("a​b", ["invisible"], frozenset({"​"}))
-    assert new == "a​b"
+    new, _ = repair_text("a\u200bb", ["invisible"], frozenset({"\u200b"}))
+    assert new == "a\u200bb"
 
 
 def _dataset(rng, n=200):
@@ -87,26 +87,26 @@ def test_fix_refuses_in_place_and_existing_output(tmp_path):
 
 def test_fix_csv_keeps_unchanged_rows_byte_identical(tmp_path):
     src = tmp_path / "in.csv"
-    raw = ('﻿id,text,note\r\n1,"plain, quoted",ok\r\n2,cafÃ©,"multi\r\nline"\r\n'
+    raw = ('\ufeffid,text,note\r\n1,"plain, quoted",ok\r\n2,caf\u00c3\u00a9,"multi\r\nline"\r\n'
            '3,  spaced  ,"say ""hi"""\r\n')
     src.write_bytes(raw.encode())
     out = tmp_path / "out.csv"
     res = fix_file(src, out)
     assert res.ok and res.changed == 1 and res.unchanged_identical == 2
     got = out.read_bytes().decode()
-    assert got.startswith('﻿id,text,note\r\n1,"plain, quoted",ok\r\n')
+    assert got.startswith('\ufeffid,text,note\r\n1,"plain, quoted",ok\r\n')
     assert got.endswith('3,  spaced  ,"say ""hi"""\r\n')
-    rows = list(csv.reader(io.StringIO(got.removeprefix("﻿"), newline="")))
-    assert rows[2] == ["2", "café", "multi\r\nline"]
+    rows = list(csv.reader(io.StringIO(got.removeprefix("\ufeff"), newline="")))
+    assert rows[2] == ["2", "caf\u00e9", "multi\r\nline"]
 
 
 def test_fix_txt_and_gzip(tmp_path):
     src = tmp_path / "in.txt.gz"
-    src.write_bytes(gzip.compress("clean line\ncafÃ©\nno newline".encode()))
+    src.write_bytes(gzip.compress("clean line\ncaf\u00c3\u00a9\nno newline".encode()))
     out = tmp_path / "out.txt"
     res = fix_file(src, out)
     assert res.ok
-    assert out.read_text() == "clean line\ncafé\nno newline"
+    assert out.read_text() == "clean line\ncaf\u00e9\nno newline"
 
 
 def test_fix_keeps_invalid_utf8_and_malformed_lines(tmp_path):
@@ -118,20 +118,20 @@ def test_fix_keeps_invalid_utf8_and_malformed_lines(tmp_path):
     assert res.ok and len(res.input_errors) == 1
     lines = out.read_bytes().splitlines(keepends=True)
     assert lines[:3] == data.splitlines(keepends=True)[:3]
-    assert json.loads(lines[3]) == {"t": "café"}
+    assert json.loads(lines[3]) == {"t": "caf\u00e9"}
 
 
 def test_fix_field_filter(tmp_path):
     src = tmp_path / "in.jsonl"
-    src.write_text(json.dumps({"a": "cafÃ©", "b": "cafÃ©"}) + "\n")
+    src.write_text(json.dumps({"a": "caf\u00c3\u00a9", "b": "caf\u00c3\u00a9"}) + "\n")
     out = tmp_path / "out.jsonl"
     fix_file(src, out, fields=["a"])
-    assert json.loads(out.read_text()) == {"a": "café", "b": "cafÃ©"}
+    assert json.loads(out.read_text()) == {"a": "caf\u00e9", "b": "caf\u00c3\u00a9"}
 
 
 def test_fix_cli(tmp_path, capsys):
     src = tmp_path / "in.jsonl"
-    src.write_text(json.dumps({"id": 1, "t": "x​y"}) + "\n")
+    src.write_text(json.dumps({"id": 1, "t": "x\u200by"}) + "\n")
     out = tmp_path / "out.jsonl"
     assert main(["fix", str(src), str(out), "--repair", "invisible", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)

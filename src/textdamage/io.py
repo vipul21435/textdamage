@@ -128,7 +128,7 @@ def iter_records(
         for n, raw in enumerate(data.splitlines(keepends=True), 1):
             text = decode(raw).rstrip("\r\n")
             if n == 1:
-                text = text.removeprefix("﻿")
+                text = text.removeprefix("\ufeff")
             yield Record(str(n), [("text", text)], None, raw, None, n)
     else:
         raise ValueError(f"unknown format: {fmt}")
@@ -149,7 +149,7 @@ def _jsonl(data, fields, id_field, source_field, source_host, errors) -> Iterato
     for n, raw in enumerate(data.splitlines(keepends=True), 1):
         text = decode(raw)
         if n == 1:
-            text = text.removeprefix("﻿")
+            text = text.removeprefix("\ufeff")
         if not text.strip():
             yield Record("", [], None, raw, None, n, passthrough=True)
             continue
@@ -163,7 +163,7 @@ def _jsonl(data, fields, id_field, source_field, source_host, errors) -> Iterato
 
 
 def _json(data, fields, id_field, source_field, source_host, errors) -> Iterator[Record]:
-    text = decode(data).removeprefix("﻿")
+    text = decode(data).removeprefix("\ufeff")
     try:
         obj = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -192,7 +192,7 @@ class _LineTap:
 
 def _csv(data, delim, fields, id_field, source_field, source_host, errors) -> Iterator[Record]:
     text = decode(data)
-    bom = text.startswith("﻿")
+    bom = text.startswith("\ufeff")
     tap = _LineTap(text[1:] if bom else text)
     reader = csv.reader(tap, delimiter=delim)
     try:
@@ -202,7 +202,7 @@ def _csv(data, delim, fields, id_field, source_field, source_host, errors) -> It
     except csv.Error as exc:
         errors.add(1, f"invalid CSV header: {exc}")
         return
-    header_raw = ("﻿" if bom else "") + "".join(tap.consumed)
+    header_raw = ("\ufeff" if bom else "") + "".join(tap.consumed)
     yield Record("", [], None, encode(header_raw), header, 0, passthrough=True)
     tap.consumed = []
     row_no = 0

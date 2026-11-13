@@ -36,7 +36,7 @@ def test_malformed_jsonl_is_reported_and_skipped(tmp_path):
 
 def test_json_array_and_nested_source(tmp_path):
     p = tmp_path / "d.json"
-    p.write_text(json.dumps([{"meta": {"src": "s1"}, "t": "a�"}, {"meta": {"src": "s2"}, "t": "b"}]))
+    p.write_text(json.dumps([{"meta": {"src": "s1"}, "t": "a\ufffd"}, {"meta": {"src": "s2"}, "t": "b"}]))
     rep = scan_file(p, source_field="meta.src")
     d = rep.to_dict()
     assert d["classes"]["replacement"]["records"] == 1
@@ -48,13 +48,13 @@ def test_json_array_and_nested_source(tmp_path):
 
 def test_csv_and_tsv(tmp_path):
     p = tmp_path / "d.csv"
-    p.write_text('id,src,text\n1,a,"x​y"\n2,b,"multi\nline �"\n3,a\n', encoding="utf-8")
+    p.write_text('id,src,text\n1,a,"x\u200by"\n2,b,"multi\nline \ufffd"\n3,a\n', encoding="utf-8")
     rep = scan_file(p, source_field="src")
     d = rep.to_dict()
     assert d["records"] == 2 and len(d["input_errors"]) == 1
     assert set(d["fields"]) == {"text"}
     t = tmp_path / "d.tsv"
-    t.write_text("text\tlang\nzero​width\ten\n", encoding="utf-8")
+    t.write_text("text\tlang\nzero\u200bwidth\ten\n", encoding="utf-8")
     assert scan_file(t, fields=["text"]).to_dict()["classes"]["invisible"]["records"] == 1
     empty = tmp_path / "e.csv"
     empty.write_text("")
@@ -63,7 +63,7 @@ def test_csv_and_tsv(tmp_path):
 
 def test_txt_gz_and_limit(tmp_path):
     p = tmp_path / "d.txt.gz"
-    p.write_bytes(gzip.compress("﻿one ​\ntwo\nthree �\n".encode()))
+    p.write_bytes(gzip.compress("\ufeffone \u200b\ntwo\nthree \ufffd\n".encode()))
     assert scan_file(p).to_dict()["classes"]["invisible"]["records"] == 1
     assert scan_file(p, limit=2).records == 2
     md = scan_file(p).to_markdown()

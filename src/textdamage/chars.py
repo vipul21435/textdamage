@@ -26,8 +26,8 @@ C1 = _cps((0x80, 0x9F))
 # Explicit directional formatting characters (UAX #9, section 2) and the Arabic letter mark.
 BIDI = _cps(0x061C, 0x200E, 0x200F, (0x202A, 0x202E), (0x2066, 0x2069))
 
-BOM = "﻿"
-REPLACEMENT = "�"
+BOM = "\ufeff"
+REPLACEMENT = "\ufffd"
 
 # Zero-width and other invisible characters.  Joiners and variation selectors have legitimate uses; see
 # ``invisible_is_legitimate`` for the contexts that are not counted.
@@ -52,8 +52,8 @@ INVISIBLE = _cps(
 # Invisible characters that ``fix`` may delete: they carry no meaning in running text.
 REMOVABLE_INVISIBLE = _cps(0x00AD, 0x180E, 0x200B, (0x2060, 0x2064), (0x206A, 0x206F))
 
-ZWJ = "‍"
-ZWNJ = "‌"
+ZWJ = "\u200d"
+ZWNJ = "\u200c"
 VARIATION_SELECTORS = _cps((0xFE00, 0xFE0F))
 TAGS = _cps(0xE0001, (0xE0020, 0xE007F))
 BLACK_FLAG = "\U0001f3f4"
@@ -105,29 +105,38 @@ def invisible_is_legitimate(text: str, i: int) -> bool:
 
 
 def is_compat(ch: str) -> bool:
-    """Compatibility character of a formatting kind (fullwidth, mathematical, circled, ligature...)."""
+    """Compatibility character of a formatting kind (fullwidth, mathematical, circled, ligature...).
+
+    Fullwidth punctuation and the ideographic space are ordinary in Chinese and Japanese text, so a ``<wide>``
+    character counts only when it is a letter, digit or symbol.
+    """
     if ch in LIGATURES:
         return True
     dec = unicodedata.decomposition(ch)
-    return bool(dec) and dec.split(" ", 1)[0] in COMPAT_TAGS
+    if not dec:
+        return False
+    tag = dec.split(" ", 1)[0]
+    if tag == "<wide>":
+        return unicodedata.category(ch)[0] in "LNS"
+    return tag in COMPAT_TAGS
 
 
 # Cyrillic and Greek letters that UTS #39 confusables.txt lists as confusable with a single Latin letter.
 # Small on purpose: only Latin, Cyrillic and Greek, only one-to-one letter pairs.
 CONFUSABLE_TO_LATIN: dict[str, str] = {
     # Cyrillic lowercase
-    "а": "a", "с": "c", "е": "e", "һ": "h", "і": "i", "ј": "j",
-    "о": "o", "р": "p", "ѕ": "s", "х": "x", "у": "y", "ԁ": "d",
-    "ԛ": "q", "ԝ": "w",
+    "\u0430": "a", "\u0441": "c", "\u0435": "e", "\u04bb": "h", "\u0456": "i", "\u0458": "j",
+    "\u043e": "o", "\u0440": "p", "\u0455": "s", "\u0445": "x", "\u0443": "y", "\u0501": "d",
+    "\u051b": "q", "\u051d": "w",
     # Cyrillic uppercase
-    "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "І": "I",
-    "Ј": "J", "К": "K", "М": "M", "О": "O", "Р": "P", "Ѕ": "S",
-    "Т": "T", "Х": "X", "Ү": "Y", "Ԛ": "Q", "Ԝ": "W",
+    "\u0410": "A", "\u0412": "B", "\u0421": "C", "\u0415": "E", "\u041d": "H", "\u0406": "I",
+    "\u0408": "J", "\u041a": "K", "\u041c": "M", "\u041e": "O", "\u0420": "P", "\u0405": "S",
+    "\u0422": "T", "\u0425": "X", "\u04ae": "Y", "\u051a": "Q", "\u051c": "W",
     # Greek
-    "ο": "o", "ν": "v", "α": "a", "ι": "i", "ρ": "p",
-    "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
-    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T",
-    "Υ": "Y", "Χ": "X",
+    "\u03bf": "o", "\u03bd": "v", "\u03b1": "a", "\u03b9": "i", "\u03c1": "p",
+    "\u0391": "A", "\u0392": "B", "\u0395": "E", "\u0396": "Z", "\u0397": "H", "\u0399": "I",
+    "\u039a": "K", "\u039c": "M", "\u039d": "N", "\u039f": "O", "\u03a1": "P", "\u03a4": "T",
+    "\u03a5": "Y", "\u03a7": "X",
 }  # fmt: skip
 LATIN_TO_CONFUSABLE: dict[str, set[str]] = {}
 for _k, _v in CONFUSABLE_TO_LATIN.items():
