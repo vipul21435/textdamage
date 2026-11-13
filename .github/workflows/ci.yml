@@ -16,6 +16,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Lint
-        run: uv run --extra dev ruff check src tests examples
+        run: uv run --extra dev ruff check src tests examples scripts
       - name: Test
         run: uv run --extra dev pytest -q
