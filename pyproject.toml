@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "textdamage"
+version = "0.1.0"
+description = "Find encoding damage and invisible characters in text datasets, and repair only what is safe to repair."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Vipul Raj Jha" }]
+requires-python = ">=3.10"
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Text Processing",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.5", "ftfy>=6"]
+
+[project.scripts]
+textdamage = "textdamage.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vipul21435/textdamage"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/textdamage"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
