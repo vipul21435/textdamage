@@ -71,16 +71,98 @@ def _write(text: str, out: str | None) -> None:
         sys.stdout.write(text)
 
 
-def cmd_scan(args) -> int:
+def parse_limits(specs: list[str] | None) -> list[tuple[str, float, bool]]:
+    """``CLASS=N`` (occurrences) or ``CLASS=P%`` (share of records); CLASS may be ``any``."""
+    out = []
+    for spec in specs or []:
+        if "=" not in spec:
+            raise ValueError(f"--max expects CLASS=LIMIT, got {spec!r}")
+        cls, val = spec.split("=", 1)
+        cls = cls.strip()
+        if cls != "any" and cls not in CLASSES:
+            raise ValueError(f"unknown class in --max: {cls!r}")
+        val = val.strip()
+        if val.endswith("%"):
+            out.append((cls, float(val[:-1]) / 100.0, True))
+        else:
+            out.append((cls, float(val), False))
+    return out
+
+
+def check_limits(report_dict: dict, limits: list[tuple[str, float, bool]]) -> list[str]:
+    """Messages for every limit the report exceeds."""
+    msgs = []
+    n = report_dict["records"] or 1
+    for cls, val, is_rate in limits:
+        if cls == "any":
+            records, occ = report_dict["damaged_records"], report_dict["damaged_records"]
+        else:
+            st = report_dict["classes"].get(cls, {"records": 0, "occurrences": 0})
+            records, occ = st["records"], st["occurrences"]
+        if is_rate and records / n > val:
+            msgs.append(f"{cls}: {records / n:.3%} of records > {val:.3%}")
+        elif not is_rate and occ > val:
+            msgs.append(f"{cls}: {occ} occurrences > {val:g}")
+    return msgs
+
+
+def _scan(args):
     from .scan import scan_file
 
-    report = scan_file(
+    return scan_file(
         args.path, fields=args.fields, id_field=args.id_field, source_field=args.source_field,
         source_host=args.source_host, fmt=args.fmt, repeat_min=args.repeat_min, ignore=_ignore_set(args),
         classes=_classes(args), limit=args.limit, top_sources=args.top_sources,
     )
+
+
+def cmd_scan(args) -> int:
+    limits = parse_limits(args.max)
+    report = _scan(args)
+    d = report.to_dict()
     _write(report.to_json() + "\n" if args.json else report.to_markdown(f"textdamage scan: {Path(args.path).name}"),
            args.output)
+    msgs = check_limits(d, limits)
+    for m in msgs:
+        print(f"textdamage: limit exceeded: {m}", file=sys.stderr)
+    return 1 if msgs else 0
+
+
+def cmd_sources(args) -> int:
+    from .report import _sources_md
+
+    if not args.source_field:
+        raise ValueError("sources needs --source-field")
+    report = _scan(args)
+    s = report.sources_summary()
+    if args.json:
+        _write(json.dumps(s, ensure_ascii=False, indent=2) + "\n", args.output)
+    else:
+        _write(_sources_md(s, limit=args.rows) + "\n", args.output)
+    return 0
+
+
+def cmd_fix(args) -> int:
+    from .fixer import fix_file
+
+    repairs = [c.strip() for c in args.repair.split(",") if c.strip()]
+    res = fix_file(
+        args.path, args.output, repairs=repairs, fields=args.fields, id_field=args.id_field, fmt=args.fmt,
+        log=args.log, ignore=_ignore_set(args), force=args.force,
+    )
+    d = res.to_dict()
+    if args.json:
+        print(json.dumps(d, indent=2))
+    else:
+        print(f"records: {d['records']}, changed: {d['changed_records']}, "
+              f"unchanged and byte-identical: {d['unchanged_records_byte_identical']}")
+        for cls, n in d["changes"].items():
+            print(f"  {cls}: {n} changes")
+        if d["input_errors"]:
+            print(f"  input errors (rows passed through unchanged): {d['input_errors']}")
+    if not res.ok:
+        print(f"textdamage: round-trip check failed at records {d['round_trip_mismatches']}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -143,7 +225,34 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--top-sources", type=int, default=3, help="k for the share of damage in the top k sources")
     s.add_argument("--json", action="store_true", help="JSON instead of Markdown")
     s.add_argument("-o", "--output", help="write the report here instead of stdout")
+    s.add_argument("--max", action="append", metavar="CLASS=LIMIT",
+                   help="exit 1 when CLASS has more than LIMIT occurrences, or more than P%% of records with "
+                   "CLASS=P%%; CLASS 'any' means any damage (repeatable)")
     s.set_defaults(func=cmd_scan)
+
+    so = sub.add_parser("sources", help="damage per source, worst first")
+    _add_input_args(so)
+    so.add_argument("--top-sources", type=int, default=3, help="k for the share of damage in the top k sources")
+    so.add_argument("--rows", type=int, default=20, help="rows to show in Markdown (default 20)")
+    so.add_argument("--json", action="store_true")
+    so.add_argument("-o", "--output")
+    so.set_defaults(func=cmd_sources)
+
+    f = sub.add_parser("fix", help="write a repaired copy with a change log; never edits in place")
+    f.add_argument("path")
+    f.add_argument("output", help="output file (must differ from the input)")
+    f.add_argument("--repair", default="mojibake",
+                   help="comma-separated classes to repair: mojibake, bom, c0, c1, invisible, non-nfc "
+                   "(default mojibake)")
+    f.add_argument("--field", action="append", dest="fields", help="repair only these fields (repeatable)")
+    f.add_argument("--id-field")
+    f.add_argument("--format", dest="fmt", choices=["jsonl", "csv", "tsv", "txt"])
+    f.add_argument("--log", help="change log path (default OUTPUT.changes.jsonl)")
+    f.add_argument("--ignore", action="append", help="character never deleted: U+200B")
+    f.add_argument("--ignore-file")
+    f.add_argument("--force", action="store_true", help="overwrite an existing output or log")
+    f.add_argument("--json", action="store_true")
+    f.set_defaults(func=cmd_fix)
 
     e = sub.add_parser("explain", help="show one string character by character")
     e.add_argument("text")
