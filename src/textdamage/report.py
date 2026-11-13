@@ -36,6 +36,7 @@ class Report:
         self.source_records: Counter = Counter()
         self.by_source: dict[str, Counter] = defaultdict(Counter)
         self.source_damaged: dict[str, set] = defaultdict(set)
+        self.source_examples: dict[str, list] = defaultdict(list)
         self.input_errors: list[tuple[int, str]] = []
         self.repairs: Counter = Counter()  # (class, damaged text, proposed repair) -> count
 
@@ -59,6 +60,9 @@ class Report:
             if source is not None:
                 self.by_source[source][fd.cls] += 1
                 self.source_damaged[source].add(key)
+                ex = self.source_examples[source]
+                if len(ex) < self.n_examples and rid not in ex:
+                    ex.append(rid)
 
     def _stats_dict(self, st: _Stats, total: int) -> dict:
         return {
@@ -85,6 +89,7 @@ class Report:
                     "share": len(self.source_damaged[src]) / n if n else 0.0,
                     "occurrences": occ,
                     "classes": dict(self.by_source[src].most_common()),
+                    "examples": self.source_examples.get(src, []),
                 }
             )
         rows.sort(key=lambda r: (-r["occurrences"], r["source"]))
@@ -170,13 +175,13 @@ def _sources_md(s: dict, limit: int = 20) -> str:
         f"Sources: {s['sources']}. The top {s['top_k']} sources by occurrences hold "
         f"{s['top_share_of_occurrences']:.1%} of all occurrences and {s['top_share_of_records']:.1%} of records.",
         "",
-        "| source | records | damaged records | share | occurrences | classes |",
-        "|---|---|---|---|---|---|",
+        "| source | records | damaged records | share | occurrences | classes | example ids |",
+        "|---|---|---|---|---|---|---|",
     ]
     for r in s["rows"][:limit]:
         cl = ", ".join(f"{k} {v}" for k, v in list(r["classes"].items())[:4])
         lines.append(
             f"| {_md(r['source'])} | {r['records']} | {r['damaged_records']} | {r['share']:.2%} | "
-            f"{r['occurrences']} | {cl} |"
+            f"{r['occurrences']} | {cl} | {', '.join(_md(e) for e in r['examples'])} |"
         )
     return "\n".join(lines)

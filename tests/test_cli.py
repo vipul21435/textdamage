@@ -107,3 +107,19 @@ def test_report_lists_proposed_repairs(tmp_path, capsys):
     assert (top["text"], top["repair"], top["count"]) == ("\u00c3\u00a9", "\u00e9", 3)
     assert main(["scan", str(p)]) == 0
     assert "## Proposed mojibake repairs" in capsys.readouterr().out
+
+
+def test_example_script_runs(capsys):
+    import runpy
+    from pathlib import Path
+
+    runpy.run_path(str(Path(__file__).parent.parent / "examples" / "scan_and_fix.py"), run_name="__main__")
+    out = capsys.readouterr().out
+    assert "mojibake" in out and out.strip().splitlines()[-4:] == ["True"] * 4
+
+
+def test_sources_rows_have_example_ids(tmp_path, capsys):
+    p = tmp_path / "d.jsonl"
+    write_jsonl(p, [{"id": "k1", "s": "a", "t": "x\u200b"}, {"id": "k2", "s": "a", "t": "y\u200b"}])
+    assert main(["sources", str(p), "--source-field", "s", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["rows"][0]["examples"] == ["k1", "k2"]
