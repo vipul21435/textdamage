@@ -98,3 +98,11 @@ def test_script_clash_at_the_edge_is_refused():
     assert repair_mojibake("\u00abAQU\u00cd\u00bb") == "\u00abAQU\u00cd\u00bb"
     # a Greek capital standing alone is still repaired
     assert repair_mojibake("letter \u00ce\u00a8 here") == "letter \u03a8 here"
+
+
+def test_partly_decodable_damage_is_left_alone():
+    # a double encoding of a right single quote with two characters lost on the way
+    text = "we\u00c3\u00a2\u00e2\u00ac\u00e2\u00a2ll " + make_mojibake("caf\u00e9")
+    hits = find_mojibake(text)
+    assert [(h.text, h.fix) for h in hits] == [("\u00c3\u00a2", None), ("\u00c3\u00a9", "\u00e9")]
+    assert repair_mojibake(text) == "we\u00c3\u00a2\u00e2\u00ac\u00e2\u00a2ll caf\u00e9"

@@ -161,11 +161,30 @@ def _script_clash(a: str, b: str) -> bool:
     return sa != sb and sa in _MIXABLE and sb in _MIXABLE and "LATIN" in (sa, sb)
 
 
+# Characters that almost only appear as leftovers of partly decodable damage: C1 controls, the Windows-1252
+# symbols at bytes 0x80..0x9F, and the not sign.
+LEFTOVER = frozenset(chr(b) for b in range(0x80, 0xA0)) | frozenset(_SLOPPY_1252[b] for b in range(0x80, 0xA0)) | {
+    "\u00ac"
+}
+
+
+def _leftover_at(text: str, i: int) -> bool:
+    """A leftover character at ``i``, or a lead character followed by one."""
+    if not 0 <= i < len(text):
+        return False
+    if text[i] in LEFTOVER:
+        return True
+    return "\u00c2" <= text[i] <= "\u00f4" and i + 1 < len(text) and text[i + 1] in LEFTOVER
+
+
 def _clashes(text: str, start: int, end: int, fix: str) -> bool:
-    """A repair whose first or last letter would change script against the letter next to it."""
+    """A repair whose first or last letter would change script against the letter next to it, or that
+    touches leftovers of damage it does not explain."""
     if start > 0 and _script_clash(text[start - 1], fix[0]):
         return True
-    return end < len(text) and _script_clash(fix[-1], text[end])
+    if end < len(text) and _script_clash(fix[-1], text[end]):
+        return True
+    return _leftover_at(text, end) or (start > 0 and text[start - 1] in LEFTOVER)
 
 
 def find_mojibake(text: str) -> list[MojibakeHit]:

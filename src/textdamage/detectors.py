@@ -4,7 +4,7 @@ Class names, in report order:
 
 - ``mojibake``: UTF-8 decoded once as Latin-1 or Windows-1252, repair accepted (see ``textdamage.mojibake``).
 - ``mojibake-2``: the same damage applied twice, repair accepted.
-- ``mojibake-ambiguous``: mojibake-shaped text in a record that has accepted repairs, but whose own repair
+- ``mojibake-ambiguous``: mojibake-shaped text in a string that has accepted repairs, but whose own repair
   failed the plausibility rule (or a lone ``\\u00c2``/``\\u00c3`` before a space, where the second byte was
   lost).  Never changed.
 - ``replacement``: U+FFFD.
