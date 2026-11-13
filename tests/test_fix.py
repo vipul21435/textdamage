@@ -137,3 +137,14 @@ def test_fix_cli(tmp_path, capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["changed_records"] == 1 and d["changes"] == {"invisible": 1}
     assert main(["fix", str(src), str(src)]) == 2
+
+
+def test_change_log_escapes_invisible_characters(tmp_path):
+    src = tmp_path / "in.jsonl"
+    src.write_text(json.dumps({"id": 7, "t": "x\u200by"}) + "\n")
+    out = tmp_path / "out.jsonl"
+    fix_file(src, out, repairs=["invisible"])
+    raw = (tmp_path / "out.jsonl.changes.jsonl").read_text()
+    assert "\\u200b" in raw and raw.isascii()
+    expected = {"id": "7", "line": 1, "field": "t", "class": "invisible", "before": "\u200b", "after": ""}
+    assert json.loads(raw) == expected

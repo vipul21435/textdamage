@@ -11,7 +11,8 @@ Only classes whose repair does not need a guess are offered:
   are kept: they can carry meaning);
 - ``non-nfc``: values are normalised to NFC (canonically equivalent, so the text means the same).
 
-Records with no change are written back as the exact bytes they were read from; a changed record is
+The change log is JSON lines with ASCII escapes, so invisible characters stay visible in it.  Records with no
+change are written back as the exact bytes they were read from; a changed record is
 re-serialised (JSON lines with ``ensure_ascii=False``, CSV rows with the csv module).  After writing, the
 output is read back and every unchanged record is compared byte for byte with the input.
 """
@@ -198,7 +199,7 @@ def fix_file(
             for path, c in rec_changes:
                 result.changes[c.cls] += 1
                 fl.write(json.dumps({"id": rec.rid, "line": rec.line, "field": path, "class": c.cls,
-                                     "before": c.before, "after": c.after}, ensure_ascii=False) + "\n")
+                                     "before": c.before, "after": c.after}, ensure_ascii=True) + "\n")
     result.input_errors = errors.items
     # round trip: read the output back and compare unchanged records byte for byte
     back = [r.raw for r in iter_records(out, fmt=fmt)]
