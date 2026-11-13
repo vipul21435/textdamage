@@ -4,8 +4,8 @@ import random
 
 import pytest
 
-from textdamage.mojibake import make_mojibake, repair_mojibake
 from tests.test_mojibake import SAMPLES
+from textdamage.mojibake import make_mojibake, repair_mojibake
 
 ftfy = pytest.importorskip("ftfy")
 
