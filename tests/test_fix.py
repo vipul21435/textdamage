@@ -148,3 +148,13 @@ def test_change_log_escapes_invisible_characters(tmp_path):
     assert "\\u200b" in raw and raw.isascii()
     expected = {"id": "7", "line": 1, "field": "t", "class": "invisible", "before": "\u200b", "after": ""}
     assert json.loads(raw) == expected
+
+
+def test_bare_cr_line_is_not_joined_by_an_emptied_line(tmp_path):
+    src = tmp_path / "in.txt"
+    data = b"one\r\x07\ntwo \x00\n"
+    src.write_bytes(data)
+    out = tmp_path / "out.txt"
+    res = fix_file(src, out, repairs=["c0"])
+    assert res.ok and res.changed == 1
+    assert out.read_bytes() == b"one\r\x07\ntwo \n"

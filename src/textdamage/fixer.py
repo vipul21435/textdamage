@@ -99,6 +99,8 @@ def _line_ending(raw: bytes) -> bytes:
         return b"\r\n"
     if raw.endswith(b"\n"):
         return b"\n"
+    if raw.endswith(b"\r"):
+        return b"\r"
     return b""
 
 
@@ -190,12 +192,16 @@ def fix_file(
                 new_obj = fn("text", rec.fields[0][1])
             else:
                 new_obj = [fn(h, v) for h, v in zip(header, rec.obj, strict=True)]
+            new_bytes = _serialise(fmt, new_obj, rec.raw, delim) if rec_changes else rec.raw
+            if rec_changes and new_bytes.startswith(b"\n") and idx > 0 and raws[idx - 1].endswith(b"\r"):
+                # a line emptied by the repair after a bare CR would join the two lines: keep it as it was
+                rec_changes, new_bytes = [], rec.raw
             if not rec_changes:
                 fo.write(rec.raw)
                 continue
             result.changed += 1
             changed_idx.add(idx)
-            fo.write(_serialise(fmt, new_obj, rec.raw, delim))
+            fo.write(new_bytes)
             for path, c in rec_changes:
                 result.changes[c.cls] += 1
                 fl.write(json.dumps({"id": rec.rid, "line": rec.line, "field": path, "class": c.cls,
