@@ -39,7 +39,8 @@ Records: 5; with any damage: 4.
 ...
 ```
 
-The report goes on with a per-field table and a per-source table; `--json` gives the same content as JSON.
+The report goes on with a per-field table, a table of the proposed mojibake repairs (what `fix` would change)
+and a per-source table; `--json` gives the same content as JSON.
 One string, character by character (`-e` reads `\uXXXX` escapes in the argument):
 
 ```

@@ -37,6 +37,7 @@ class Report:
         self.by_source: dict[str, Counter] = defaultdict(Counter)
         self.source_damaged: dict[str, set] = defaultdict(set)
         self.input_errors: list[tuple[int, str]] = []
+        self.repairs: Counter = Counter()  # (class, damaged text, proposed repair) -> count
 
     def add(self, rid: str, source: str | None, findings: Iterable[tuple[str, Finding]], fields: Iterable[str]):
         self.records += 1
@@ -47,6 +48,8 @@ class Report:
             self.source_records[source] += 1
         for fname, fd in findings:
             self.damaged.add(key)
+            if fd.fix is not None and fd.cls in ("mojibake", "mojibake-2"):
+                self.repairs[(fd.cls, fd.text[:MAX_SEQ], fd.fix[:MAX_SEQ])] += 1
             for st in (self.by_class[fd.cls], self.by_field[fname][fd.cls]):
                 st.records.add(key)
                 st.occurrences += 1
@@ -106,6 +109,10 @@ class Report:
                 for f, st in sorted(self.by_field.items())
             },
             "input_errors": [{"line": n, "error": m} for n, m in self.input_errors],
+            "proposed_repairs": [
+                {"class": c, "text": t, "repair": r, "shown": f"{display(t)} -> {display(r)}", "count": n}
+                for (c, t, r), n in self.repairs.most_common(10)
+            ],
         }
         if self.source_records:
             out["sources"] = self.sources_summary()
@@ -138,6 +145,12 @@ class Report:
             for f, cl in d["fields"].items():
                 for c, s in cl.items():
                     lines.append(f"| {_md(f)} | {c} | {s['records']} | {s['share']:.2%} | {s['occurrences']} |")
+        if d["proposed_repairs"]:
+            lines += ["", "## Proposed mojibake repairs", "", "| class | damaged | repair | occurrences |",
+                      "|---|---|---|---|"]
+            for r in d["proposed_repairs"]:
+                lines.append(f"| {r['class']} | `{_md(display(r['text']))}` | `{_md(display(r['repair']))}` | "
+                             f"{r['count']} |")
         if "sources" in d:
             lines += ["", _sources_md(d["sources"])]
         if d["input_errors"]:

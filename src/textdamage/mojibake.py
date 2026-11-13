@@ -12,7 +12,7 @@ script and symbol blocks, plus remaining mojibake sequences.  A repair is also r
 letter would sit against a letter of another script among Latin, Greek and Cyrillic (``"AQU\u00cd\u00bb"`` in
 Spanish would otherwise become a Latin word ending in a Greek letter).  The repair is accepted only when the repaired
 group scores 0 (every candidate group scores at least 1).  Everything else is never changed; a rejected group is
-counted as ambiguous when its record also holds an accepted repair, and otherwise treated as ordinary text
+counted as ambiguous when the same string also holds an accepted repair, and otherwise treated as ordinary text
 (``"\u00df\u201c"`` in German decodes to an NKo letter and is left alone).
 """
 

@@ -96,3 +96,14 @@ def test_classes_flag_and_output_file(tmp_path, capsys):
         main(["scan", str(p), "--classes", "bogus"])
     except SystemExit as exc:
         assert "unknown class" in str(exc)
+
+
+def test_report_lists_proposed_repairs(tmp_path, capsys):
+    p = tmp_path / "d.jsonl"
+    write_jsonl(p, [{"t": "caf\u00c3\u00a9 \u00c3\u00a9t\u00c3\u00a9"}, {"t": "it\u00e2\u0080\u0099s"}])
+    assert main(["scan", str(p), "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    top = d["proposed_repairs"][0]
+    assert (top["text"], top["repair"], top["count"]) == ("\u00c3\u00a9", "\u00e9", 3)
+    assert main(["scan", str(p)]) == 0
+    assert "## Proposed mojibake repairs" in capsys.readouterr().out
