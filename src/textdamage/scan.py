@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -22,19 +23,30 @@ def scan_file(
     ignore: Iterable[str] = (),
     classes: Iterable[str] | None = None,
     limit: int | None = None,
+    sample: int | None = None,
+    seed: int = 0,
     top_sources: int = 3,
 ) -> Report:
-    """Scan every selected text field of every record in ``path``."""
+    """Scan every selected text field of every record in ``path``.
+
+    ``limit`` stops after the first N records; ``sample`` scans a uniform random sample of N records
+    (reservoir sampling with ``seed``), in file order.
+    """
     errors = InputErrors()
     report = Report(top_sources=top_sources)
     ign = frozenset(ignore)
     cls = None if classes is None else list(classes)
-    for rec in iter_records(
-        path, fields=fields, id_field=id_field, source_field=source_field, source_host=source_host,
-        fmt=fmt, errors=errors,
-    ):
-        if rec.passthrough:
-            continue
+    records = (
+        r
+        for r in iter_records(
+            path, fields=fields, id_field=id_field, source_field=source_field, source_host=source_host,
+            fmt=fmt, errors=errors,
+        )
+        if not r.passthrough
+    )
+    if sample is not None:
+        records = iter(reservoir(records, sample, seed))
+    for rec in records:
         if limit is not None and report.records >= limit:
             break
         found = []
@@ -43,3 +55,20 @@ def scan_file(
         report.add(rec.rid, rec.source, found, [f for f, _ in rec.fields])
     report.input_errors = errors.items
     return report
+
+
+def reservoir(items, k: int, seed: int = 0) -> list:
+    """Uniform sample of ``k`` items (Algorithm R), returned in input order."""
+    if k < 0:
+        raise ValueError("sample size must be non-negative")
+    rng = random.Random(seed)
+    kept: list = []
+    for i, item in enumerate(items):
+        if i < k:
+            kept.append((i, item))
+        else:
+            j = rng.randint(0, i)
+            if j < k:
+                kept[j] = (i, item)
+    kept.sort(key=lambda t: t[0])
+    return [item for _, item in kept]

@@ -6,10 +6,10 @@ import random
 
 import pytest
 
+from tests.test_mojibake import SAMPLES
 from textdamage.cli import main
 from textdamage.fixer import fix_file, repair_text
 from textdamage.mojibake import make_mojibake
-from tests.test_mojibake import SAMPLES
 
 
 def test_repair_text_classes():

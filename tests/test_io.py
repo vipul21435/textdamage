@@ -68,3 +68,27 @@ def test_txt_gz_and_limit(tmp_path):
     assert scan_file(p, limit=2).records == 2
     md = scan_file(p).to_markdown()
     assert "invisible" in md and "<U+200B>" in md
+
+
+def test_reservoir_sample_is_uniform_and_seeded():
+    from collections import Counter
+
+    from textdamage.scan import reservoir
+
+    assert reservoir(range(5), 10) == [0, 1, 2, 3, 4]
+    assert reservoir(range(100), 5, seed=1) == reservoir(range(100), 5, seed=1)
+    hits = Counter()
+    for seed in range(2000):
+        hits.update(reservoir(range(10), 3, seed=seed))
+    # each item is kept with probability 3/10: 600 expected per item out of 2000 draws
+    assert all(abs(hits[i] - 600) < 90 for i in range(10))
+    try:
+        reservoir(range(3), -1)
+    except ValueError:
+        pass
+
+
+def test_scan_sample(tmp_path):
+    p = tmp_path / "d.txt"
+    p.write_text("".join(f"line {i}\n" for i in range(50)))
+    assert scan_file(p, sample=10, seed=4).records == 10

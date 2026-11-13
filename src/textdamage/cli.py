@@ -62,6 +62,8 @@ def _add_input_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ignore-file", help="file with one --ignore entry per line")
     p.add_argument("--classes", help="comma-separated classes to run (default all)")
     p.add_argument("--limit", type=int, help="scan only the first N records")
+    p.add_argument("--sample", type=int, help="scan a uniform random sample of N records")
+    p.add_argument("--seed", type=int, default=0, help="seed for --sample (default 0)")
 
 
 def _write(text: str, out: str | None) -> None:
@@ -112,7 +114,8 @@ def _scan(args):
     return scan_file(
         args.path, fields=args.fields, id_field=args.id_field, source_field=args.source_field,
         source_host=args.source_host, fmt=args.fmt, repeat_min=args.repeat_min, ignore=_ignore_set(args),
-        classes=_classes(args), limit=args.limit, top_sources=args.top_sources,
+        classes=_classes(args), limit=args.limit, sample=args.sample, seed=args.seed,
+        top_sources=args.top_sources,
     )
 
 
